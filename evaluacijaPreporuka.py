@@ -377,7 +377,7 @@ def pripremaPodatciSamoOpisi(conn):
         json.dump(djelaPosuDjela, file)
 
 
-#COSINUS EVALUACIJE
+#KOSINUS EVALUACIJE
 def fastTextEvaluacijaCos(model, matrica, inMatrix, outMatrix, posuDjela, korisnik, djelaPosuDjela):
     with open(posuDjela, 'r') as file:
         posuDjela = json.load(file)
@@ -396,6 +396,7 @@ def fastTextEvaluacijaCos(model, matrica, inMatrix, outMatrix, posuDjela, korisn
 
     rezultatModela = 0.0  
     preporucena = set()
+    brPogodaka = 0
 
     for opciKorisnik in korisnik:
   
@@ -449,10 +450,12 @@ def fastTextEvaluacijaCos(model, matrica, inMatrix, outMatrix, posuDjela, korisn
             if indexdjeloA in top_indices:
                 position = np.where(top_indices == indexdjeloA)[0][0] + 1  # 1-based index
                 dcg = 1.0 / np.log2(position + 1)
+                brPogodaka = brPogodaka +1
             
             rezultatModela += dcg
 
     print(len(preporucena))
+    print(brPogodaka)
     return rezultatModela
 
 def BagOFWordsEvaluacijaCos(matrica, indexWOut, indexWIn, atrbutiRJ, posuDjela, korisnik, djelaPosuDjela):
@@ -479,6 +482,8 @@ def BagOFWordsEvaluacijaCos(matrica, indexWOut, indexWIn, atrbutiRJ, posuDjela, 
 
     preporucena = set()
     rezultatModela = 0.0  
+    brPogodaka = 0
+
 
     for opciKorisnik in korisnik:   
         for djeloA in opciKorisnik:
@@ -530,15 +535,18 @@ def BagOFWordsEvaluacijaCos(matrica, indexWOut, indexWIn, atrbutiRJ, posuDjela, 
             if indexdjeloA in top_indices:
                 position = np.where(top_indices == indexdjeloA)[0][0] + 1  # 1-based index
                 dcg = 1.0 / np.log2(position + 1)
+                brPogodaka += 1
             
             rezultatModela += dcg
+
+    print(brPogodaka)
     print(len(preporucena))
     return rezultatModela
 
-def DualBagOFWordsEvaluacijaCosKaznena(
+def DualBagOFWordsEvaluacijaCos(
     matricaA, indexWOutA, indexWInA, atrbutiRJA, posuDjelaA, djelaPosuDjelaA,
     matricaB, indexWOutB, indexWInB, atrbutiRJB, posuDjelaB, djelaPosuDjelaB,
-    korisnik, faktorA, faktorB, alfa
+    korisnik, faktorA, faktorB
 ):
 
     # Učitavanje podataka za model A
@@ -582,6 +590,7 @@ def DualBagOFWordsEvaluacijaCosKaznena(
 
     rezultatModela = 0.0
     preporucena = set()
+    brPogodaka = 0
 
     for opciKorisnik in korisnik:
 
@@ -602,12 +611,11 @@ def DualBagOFWordsEvaluacijaCosKaznena(
             for atribut in sumaDjelaKorisnikaA:
                 indeks = atrbutiRJA[atribut]
                 sparse_vektorA[indeks] = 1
-            
-            # Normalizacija vektora korisnika za model 
-            norm_sparse_vektorA = sparse_vektorA.copy()
-            vektor_norm_A = np.linalg.norm(sparse_vektorA)
-            if vektor_norm_A > 0:
-                norm_sparse_vektorA = sparse_vektorA / vektor_norm_A
+            #normalizacija vektora korisnika za model A
+            if np.linalg.norm(sparse_vektorA) != 0:
+                norm_sparse_vektorA = sparse_vektorA / np.linalg.norm(sparse_vektorA)
+            else:
+                norm_sparse_vektorA = sparse_vektorA
 
             # Vektor korisnika za model B
             broj_atributaB = bagMatrixB.shape[1]
@@ -615,24 +623,24 @@ def DualBagOFWordsEvaluacijaCosKaznena(
             for atribut in sumaDjelaKorisnikaB:
                 indeks = atrbutiRJB[atribut]
                 sparse_vektorB[indeks] = 1
-            
-            # Normalizacija vektora korisnika za model N
-            norm_sparse_vektorB = sparse_vektorB.copy()
-            vektor_norm_B = np.linalg.norm(sparse_vektorB)
-            if vektor_norm_B > 0:
-                norm_sparse_vektorB = sparse_vektorB / vektor_norm_B
+            #normalizacija vektora korisnika za model B
+            if np.linalg.norm(sparse_vektorB) != 0:
+                norm_sparse_vektorB = sparse_vektorB / np.linalg.norm(sparse_vektorB)
+            else:
+                norm_sparse_vektorB = sparse_vektorB
 
+            # Provjera je li djelo u oba modela
             if djelaPosuDjelaA[djeloA] is None or djelaPosuDjelaB[djeloA] is None:
                 continue
 
             indexdjeloA_A = indexWInA[djelaPosuDjelaA[djeloA][:-4] if djelaPosuDjelaA[djeloA][-4:] == "None" else djelaPosuDjelaA[djeloA]]
 
             # Računanje kosinusne sličnosti za oba modela
-            slicnostiA = norm_matrixA.dot(norm_sparse_vektorA)
+            slicnostiA = norm_matrixA.dot(norm_sparse_vektorA) # rezultat izracuna jednodimenzionalnim NumPy polja (zapravo jednodimenzionalni vektor)
             slicnostiB = norm_matrixB.dot(norm_sparse_vektorB)
 
             # Filtriranje djela koja tvore osnovu modela (posudbe - djeloA (ono je leave-out)) za oba modela
-            maskA = np.ones(norm_matrixA.shape[0], dtype=bool)
+            maskA = np.ones(norm_matrixA.shape[0], dtype=bool) #vraca "jednodimenzionalni vektor" pun 0 velicine matrice
             maskB = np.ones(norm_matrixB.shape[0], dtype=bool)
             for element in opciKorisnik:
                 if element != djeloA and djelaPosuDjelaA[element] is not None:
@@ -642,32 +650,32 @@ def DualBagOFWordsEvaluacijaCosKaznena(
                     idxB = indexWInB[djelaPosuDjelaB[element][:-4] if djelaPosuDjelaB[element][-4:] == "None" else djelaPosuDjelaB[element]]
                     maskB[idxB] = False
 
-            slicnostiA[~maskA] = -np.inf
-            slicnostiB[~maskB] = -np.inf
+            slicnostiA[~maskA] = -np.inf #označava sve stavke na kojima je model treniran s -beskonacno
+            slicnostiB[~maskB] = -np.inf #označava sve stavke na kojima je model treniran s -beskonacno
 
-            # power kažnjavanje koje je brže od eksponencijalne funkcije
-            slicnostiA_penalized = np.power(np.maximum(slicnostiA, 0), alfa)
-            # alfa = 1.0 nema kažnjavanja, alfa = 2.0 umjereno kažnavanje, alfa = 3.0 jako kažnjavanje (eksponiranje)
-
-            combined_slicnosti = faktorA * slicnostiA_penalized + faktorB * slicnostiB
+            # Kombinacija sličnosti
+            combined_slicnosti = faktorA * slicnostiA + faktorB * slicnostiB 
 
             # Pronalaženje top 20
             topN = 20
-            partitioned_indices = np.argpartition(-combined_slicnosti, topN)[:topN]
+            partitioned_indices = np.argpartition(-combined_slicnosti, topN)[:topN]  #fja koja pronalazi indekse topN najmanjih (minus zato ispred da bi radila obrnuto) vrijednosti u niz.
             top_indices = partitioned_indices[np.argsort(-combined_slicnosti[partitioned_indices])]
-            
+
             #za izracun opsega djela
             preporucena.update(top_indices)
-
+            
             # DCG izračun
             dcg = 0.0
             if indexdjeloA_A in top_indices:
-                position = np.where(top_indices == indexdjeloA_A)[0][0] + 1
+                position = np.where(top_indices == indexdjeloA_A)[0][0] + 1  # 1-based index
                 dcg = 1.0 / np.log2(position + 1)
+                brPogodaka += 1
+
 
             rezultatModela += dcg
 
     print(len(preporucena))
+    print(brPogodaka)
     return rezultatModela
 
 def DualBagOFWordsFastTextEvaluacijaCosKaznena(
@@ -713,6 +721,7 @@ def DualBagOFWordsFastTextEvaluacijaCosKaznena(
 
     rezultatModela = 0.0
     preporucena = set()
+    brPogodaka = 0
 
     for opciKorisnik in korisnik:
         for djeloA in opciKorisnik:
@@ -795,48 +804,16 @@ def DualBagOFWordsFastTextEvaluacijaCosKaznena(
             if indexdjeloA_A in top_indices:
                 position = np.where(top_indices == indexdjeloA_A)[0][0] + 1
                 dcg = 1.0 / np.log2(position + 1)
+                brPogodaka += 1
 
             rezultatModela += dcg
 
     print(len(preporucena))
+    print(brPogodaka)
     return rezultatModela
+
 
 #REFERENTNI MODEL 
-def randomEvaluacijaCosPotpun(indexWOut, korisnik, djelaPosuDjela):
-    with open(indexWOut, 'r') as file:
-        indexWOut = json.load(file)
-    with open(korisnik, 'r') as file:
-        korisnik = json.load(file)
-    with open(djelaPosuDjela, 'r') as file:
-        djelaPosuDjela = json.load(file)
-
-    random.seed(894)
-    ogranici = 0
-    rezultatModela = 0.0
-
-    for opciKorisnik in korisnik:
-        if(ogranici > 1000):
-            return rezultatModela
-        else:
-            ogranici = ogranici+1
-
-        #pripremanje random djela
-            sluc = []
-            while (len(sluc)<=20):
-                jedan = random.choice(indexWOut)
-                jedan = jedan.replace("@@", "")
-                if (jedan not in sluc):
-                    sluc.append(jedan)
-        
-        
-        for djeloA in opciKorisnik:
-            dcg = 0.0
-            if djelaPosuDjela[djeloA] in sluc:
-                dcg = 1.0 / np.log2(sluc.index(djelaPosuDjela[djeloA]) + 2)    
-                rezultatModela += dcg
-    
-    return rezultatModela
-
 def randomNDCG20BaselineSum(indexWOut, korisnik, djelaPosuDjela):
     # Učitavanje podataka
     with open(indexWOut, 'r') as file:
@@ -846,9 +823,10 @@ def randomNDCG20BaselineSum(indexWOut, korisnik, djelaPosuDjela):
     with open(djelaPosuDjela, 'r') as file:
         djelaPosuDjela = json.load(file)
 
-    random.seed(856)
+    random.seed(4734)
     ndcg_sum = 0.0
     preporucena = set()
+    brPogodaka = 0
 
     for opciKorisnik in korisnik:
         # Generiraj jednu random listu od 20 preporuka za korisnika
@@ -866,6 +844,7 @@ def randomNDCG20BaselineSum(indexWOut, korisnik, djelaPosuDjela):
             for djelo in opciKorisnik:
                 if djelaPosuDjela[djelo] == preporuka:
                     dcg += 1.0 / np.log2(i + 2)
+                    brPogodaka += 1
 
         # IDCG@20 = maksimalni mogući DCG (sve relevantne stavke na vrhu)
         idcg = sum(1.0 / np.log2(i + 2) for i in range(min(20, len(opciKorisnik))))
@@ -875,4 +854,5 @@ def randomNDCG20BaselineSum(indexWOut, korisnik, djelaPosuDjela):
         ndcg_sum += ndcg
 
     print(len(preporucena))
+    print(brPogodaka)
     return ndcg_sum

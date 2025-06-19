@@ -359,3 +359,119 @@ def bagOfWordsAutoriMatrix(conn):
         json.dump(indexWOut, file)
     with open('AtributiRjBagOfWordsAutor.json', 'w') as file:
         json.dump(atrbutiRJ, file)
+
+
+def bagOfWordsOpisiMatrix(conn):
+    query = "SELECT DISTINCT n.NASLOV, n.AUTOR, k.OPIS, P.PREDMET FROM BAZA.NASLOVI n JOIN baza.KLASIFIKACIJA k ON n.RECID = k.NASLOV LEFT JOIN BAZA.PREDMET p ON n.RECID = p.NASLOV WHERE n.VRSTA='Knjiga' AND godina>=1940 AND k.OPIS NOT LIKE '%#%' AND n.NASLOV IS NOT NULL ORDER BY n.NASLOV, n.AUTOR"
+    stmt = ibm_db.exec_immediate(conn, query)
+
+    rows = []  # indeksi naslova
+    cols = []  # indeksi atributa
+    data = []  # vrijednosti (1 za binarne atribute)
+
+    indexWIn = dict()
+    atrbutiRJ = dict()
+    indexWOut = []
+    indexAtr = 0
+
+    # Dohvaćanje rezultata
+    row = ibm_db.fetch_assoc(stmt)
+    br = -1
+    autor = ''
+    naslov = ''
+    tren = set()
+
+    while row:
+        d = dict(row.items())
+
+        #provjera je li sljedeci redak za isto djelo 
+        if(d['AUTOR'] != autor or d['NASLOV'] != naslov):
+            if(br>=0):
+                tren.discard('npr')
+                tren.discard('itd')
+                tren.discard('tzv')
+
+                #spremanje vektora
+                for atr in tren:
+                    if(atr not in atrbutiRJ):
+                        atrbutiRJ[atr] = indexAtr
+                        indexAtr = indexAtr + 1
+                    
+                    cols.append(atrbutiRJ[atr])
+                    data.append(1)
+                    rows.append(br)
+
+                #spremanje podataka
+                if(autor != None):
+                    indexWOut.append(str(naslov + '@@' + autor))
+                    indexWIn[str(naslov+autor)] = br
+                else:
+                    indexWOut.append(str(naslov + '@@'))
+                    indexWIn[str(naslov)] = br
+
+            br = br + 1
+            tren = set()
+            autor = d['AUTOR']
+            naslov = d['NASLOV']
+
+        
+        #dodavnaje atributa OPISa
+        separator = ['.', 'uključujući:', ' - ', '(', ')', '[', ']', ',', ':'] 
+        opisAtr = lanacSeparatora(d['OPIS'], separator) 
+        tren.update(opisAtr)
+
+        #dodavnaje atributa PREDMETa
+        separator = ['.', ' - ', '(', ')', '[', ']', ',', ':']
+        opisAtr = lanacSeparatora(d['PREDMET'], separator) 
+        tren.update(opisAtr)
+
+        row = ibm_db.fetch_assoc(stmt)
+
+    print(br)
+
+    #-----------------------------------------
+    #zadnji prolaz
+    tren.discard('npr')
+    tren.discard('itd')
+    tren.discard('tzv')
+
+    #spremanje vektora
+    for atr in tren:
+        if(atr not in atrbutiRJ):
+            atrbutiRJ[atr] = indexAtr
+            indexAtr = indexAtr + 1
+                    
+        cols.append(atrbutiRJ[atr])
+        data.append(1)
+        rows.append(br)
+
+    #spremanje podataka
+    if(autor != None):
+        indexWOut.append(str(naslov + '@@' + autor))
+        indexWIn[str(naslov+autor)] = br
+    else:
+        indexWOut.append(str(naslov + '@@'))
+        indexWIn[str(naslov)] = br
+
+
+    #-----------------------------------------
+    #stvaranje matrice 
+    # Stvaramo COO matricu
+    broj_naslova = max(rows) + 1
+    broj_atributa = len(atrbutiRJ)
+    sparse_matrix = coo_matrix((data, (rows, cols)), 
+                              shape=(broj_naslova, broj_atributa), 
+                              dtype=np.bool_)
+    save_npz('sparse_matrix_opisi.npz', sparse_matrix)
+
+
+    #spremanje pomoćnih 
+    with open('indexWInOpisBagOfWords.json', 'w') as file:
+        json.dump(indexWIn, file)
+    with open('indexWOutOpisBagOfWords.json', 'w') as file:
+        json.dump(indexWOut, file)
+    with open('AtributiRjOpisBagOfWords.json', 'w') as file:
+        json.dump(atrbutiRJ, file)
+
+    
+    
